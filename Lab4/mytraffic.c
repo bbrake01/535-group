@@ -65,9 +65,15 @@ static int kmod_init(void) {
     return result;
 }
 
+static void kmod_exit(void)
+{
+	unregister_chrdev(DEV_MAJOR, "mytraffic");
+}
 
 
 
+module_init(kmod_init);
+module_exit(kmod_exit);
 
 
 
