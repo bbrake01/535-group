@@ -15,7 +15,7 @@
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Kernelspace Module for BeagleBone Traffic Controller");
-#define DEVICE_NAME "MY_TRAFFIC"
+#define DEVICE_NAME "mytraffic"
 
 static ssize_t traffic_read(struct file *filp, char *buf, size_t count, loff_t *f_pos);
 static ssize_t traffic_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos);
