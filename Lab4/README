@@ -1,1 +1,49 @@
+Specifications
 
+After following the instructions above and confirming that your BeagleBone and traffic light circuit work properly, 
+write a self-contained kernel module called mytraffic that continuously operates your traffic lights according to the 
+specifications below as long as the module is loaded.
+
+
+Basic Features
+
+Operational Modes
+
+Your traffic light should support 3 operational modes, described below. Your traffic light should start in normal mode 
+upon module load, and the user should be able to switch modes by pressing BTN0. Light patterns are described in time 
+units of “cycles.” The length of a cycle is configurable (see “Additional Features” below), but should default to 1 
+second (i.e., 1 Hz cycle rate).
+
+    Normal: your traffic light should display the following sequence: green for 3 cycles, yellow for 1 cycle, 
+            red for 2 cycles, then repeat in that order.
+    Flashing-Red: your traffic light should continuously flash the red light (1 cycle on, 1 cycle off)
+    Flashing-Yellow: your traffic light should continuously flash the yellow light (1 cycle on, 1 cycle off)
+
+Readable Character Device
+
+Your module should set up a character device13 at /dev/mytraffic that returns the following information when read 
+(e.g., using cat /dev/mytraffic):
+
+    Current operational mode (i.e., “normal”, “flashing-red”, or “flashing-yellow”)
+    Current cycle rate (e.g., “1 Hz”, “2 Hz”, etc.)
+    Current status of each light (e.g., “red off, yellow off, green on”)
+    Whether or not a pedestrian is “present” (i.e., currently crossing or waiting to cross after pressing the call button)
+        This field is only required if your traffic light supports a pedestrian call button (see “Additional Features” below)
+
+
+Additional Features
+
+Pedestrian Call Button
+
+BTN1 should act as your traffic light’s pedestrian call button. Following Massachusetts local custom, when this button 
+is pressed, your traffic light’s next “stop” phase14 should illuminate both the red and yellow lights for 5 cycles, 
+instead of just showing the red light for 2 cycles. After the stop phase is complete, your traffic light should 
+return to the normal operation light pattern given above. This button only needs to be active in the normal operation 
+mode; pressing it while your light is in “flashing-red” or “flashing-yellow” mode may have no effect.
+
+Writable Character Device
+
+In addition to the read functionality described above, writing an integer between 1 and 9 (inclusive) to the 
+/dev/mytraffic character device should alter the cycle rate (speed) of the traffic light. For example, running 
+echo 2 > /dev/mytraffic should set the cycle rate to 2 Hz (causing each cycle to last 0.5 seconds). Any other 
+data written to the character device should be silently ignored. As always, your kernel module should never crash.
