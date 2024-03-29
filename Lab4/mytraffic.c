@@ -11,6 +11,7 @@
 #include <linux/timer.h>
 #include <linux/jiffies.h>
 #include <asm/uaccess.h>
+#include <linux/gpio.h> //for working with GPIO
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Kernelspace Module for BeagleBone Traffic Controller");
@@ -71,30 +72,21 @@ static void kmod_exit(void)
 }
 
 
+/*
+Important GPIO functions
+
+int gpio_request(unsigned int gpio, const char *label); //init
+void gpio_free(unsigned int gpio); //exit
+int gpio_direction_input(unsigned int gpio);
+int gpio_direction_output(unsigned int gpio, int value);
+int gpio_get_value(unsigned int gpio); //get input pin
+void gpio_set_value(unsigned int gpio, int value); //set output pin
+int gpio_to_irq(unsigned int gpio); //generate interrupt
+*/
+
 
 module_init(kmod_init);
 module_exit(kmod_exit);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
