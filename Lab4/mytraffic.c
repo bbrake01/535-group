@@ -73,6 +73,19 @@ static void kmod_exit(void)
 
 
 /*
+GPIO Pinout
+Red Light: 67
+Yellow Light: 68 
+Green Light: 44
+
+Button0 (switch modes): 26
+Button1 (pedestrian): 46
+
+
+*/
+
+
+/*
 Important GPIO functions
 
 int gpio_request(unsigned int gpio, const char *label); //init
