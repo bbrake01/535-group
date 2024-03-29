@@ -1,4 +1,15 @@
-Specifications
+Useful resources
+https://lwn.net/Articles/532714/
+https://tldp.org/LDP/lkmpg/2.6/html/lkmpg.html
+https://stackoverflow.com/questions/8832298/gpio-access-from-kernel-space
+
+
+
+
+
+
+
+ASSIGNMENT SPECIFICATIONS
 
 After following the instructions above and confirming that your BeagleBone and traffic light circuit work properly, 
 write a self-contained kernel module called mytraffic that continuously operates your traffic lights according to the 
