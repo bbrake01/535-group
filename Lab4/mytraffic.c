@@ -17,7 +17,7 @@ MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Kernelspace Module for BeagleBone Traffic Controller");
 
 #define DEVICE_NAME "MY_TRAFFIC"
-//Define GPIO pinout
+// Define GPIO pinout
 #define LED_RED 67
 #define LED_YELLOW 68
 #define LED_GREEN 44
@@ -32,9 +32,10 @@ static int kmod_init(void);
 static void kmod_exit(void);
 static void gpio_init(void);
 static void button_interrupt_handler(unsigned int gpio, unsigned int event, void *data);
+static void timer_callback(unsigned int data);
 const char* op_mode_to_string(enum op_mode mode);
 
-/*fops and status structs */
+/* fops and status structs */
 struct file_operations traffic_fops = {
     read: traffic_read,
     write: traffic_write,
@@ -48,8 +49,12 @@ static struct traffic_mode{
     bool pedestrian_btn;
 } traffic_info;
 
+/* Timer and cycle measurements */
+static struct timer_list timer;
+static int ncycles;
+
 /* chrdev setup */
-static int traffic_major=61;
+static int traffic_major = 61;
 static unsigned capacity = 256;
 static unsigned bite = 256;
 /* Buffer to store data */
@@ -57,8 +62,9 @@ static char *nibbler_buffer;
 /* length of the current message */
 static int nibbler_len;
 
+
 /* Function to init GPIO pins */
-void gpio_init(void) {
+static void gpio_init(void) {
     //Initialize LED pins as outputs
     gpio_request(LED_GREEN, "green");
     gpio_direction_output(LED_GREEN, 0);
@@ -74,10 +80,11 @@ void gpio_init(void) {
     gpio_direction_input(BTN1);
 }
 
+
 /* For button interrupts and changing states */
-void button_interrupt_handler(unsigned int gpio, unsigned int event, void *data) {
+static void button_interrupt_handler(unsigned int gpio, unsigned int event, void *data) {
     if (gpio == BTN0 && event == IRQF_TRIGGER_FALLING) {
-        switch (traffic_info.current_mode) {
+        switch (traffic_info.current_mode) { // Mode rotation: Normal -> Yellow -> Red
             case Normal:
                 traffic_info.current_mode = FlashYellow;
                 break;
@@ -97,6 +104,30 @@ void button_interrupt_handler(unsigned int gpio, unsigned int event, void *data)
     }   
 }
 
+
+/* Control cycles using timer */
+static void timer_callback(unsigned int data) {
+    switch (traffic_info.current_mode) {
+        case Normal:
+            if (traffic_info.pedestrian_btn) {
+                
+            } else {
+                
+            }
+            break;
+        case FlashYellow:
+            
+            break;
+        case FlashRed:
+            
+            break;
+    }
+
+    ncycles++;
+    mod_timer(&timer, jiffies + msecs_to_jiffies(traffic_info.cycle_rate));    
+}
+
+
 /* km base functions */
 static int kmod_init(void) {
     int result;
@@ -114,6 +145,11 @@ static int kmod_init(void) {
     gpio_init();
     gpio_request_irq(BTN0, button_interrupt_handler, IRQF_TRIGGER_FALLING, "btn0", NULL);
     gpio_request_irq(BTN1, button_interrupt_handler, IRQF_TRIGGER_FALLING, "btn1", NULL);
+
+    /* Start a timer to measure cycle length */
+    timer_setup(&timer, timer_callback, 0);
+    mod_timer(&timer, jiffies + msecs_to_jiffies(traffic_info.cycle_rate));
+    ncycles = 0;
     
     /* Allocating nibbler for the buffer */
     nibbler_buffer = kmalloc(capacity, GFP_KERNEL); 
@@ -140,11 +176,15 @@ static int kmod_init(void) {
     return result;
 }
 
+
 static void kmod_exit(void) {
         
     /* Freeing the major number */
     unregister_chrdev(traffic_major, DEVICE_NAME);
 
+    /* Free timer */
+    del_timer(&timer);
+    
     /* Freeing GPIO pins */
     gpio_free(LED_GREEN);
     gpio_free(LED_YELLOW);
@@ -158,6 +198,7 @@ static void kmod_exit(void) {
         kfree(nibbler_buffer);
     }
 }
+
 
 static ssize_t traffic_read(struct file *filp, char *buf, size_t count, loff_t *f_pos) {
     
@@ -216,10 +257,11 @@ static ssize_t traffic_write(struct file *filp, const char *buf, size_t count, l
     printk(KERN_INFO "TBUF STORED INFO: %s\n", tbuf);
 
     /* use tbuf value to set cycle_rate, will change to type int later */
-
-
+    // Be sure to set cycle_rate in milliseconds here
+    
     return count;
 }
+
 
 /* km helper functions */
 const char* op_mode_to_string(enum op_mode mode) {
@@ -234,6 +276,7 @@ const char* op_mode_to_string(enum op_mode mode) {
         return "Unknown";
     }
 }
+
 
 /*
 GPIO Pinout
@@ -256,6 +299,7 @@ int gpio_get_value(unsigned int gpio); //get input pin
 void gpio_set_value(unsigned int gpio, int value); //set output pin
 int gpio_to_irq(unsigned int gpio); //generate interrupt
 */
+
 
 module_init(kmod_init);
 module_exit(kmod_exit);
