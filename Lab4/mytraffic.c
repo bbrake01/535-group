@@ -71,7 +71,7 @@ void gpio_init(void) {
     gpio_request(BTN0, "btn0");
     gpio_direction_input(BTN0);
     gpio_request(BTN1, "btn1");
-    gpio_direction_input(BTN_1_PIN);
+    gpio_direction_input(BTN1);
 }
 
 /* For button interrupts and changing states */
@@ -144,7 +144,14 @@ static void kmod_exit(void) {
         
     /* Freeing the major number */
     unregister_chrdev(traffic_major, DEVICE_NAME);
-        
+
+    /* Freeing GPIO pins */
+    gpio_free(LED_GREEN);
+    gpio_free(LED_YELLOW);
+    gpio_free(LED_RED);
+    gpio_free(BTN0);
+    gpio_free(BTN1);
+    
     /* Freeing buffer memory */
     if (nibbler_buffer)
     {
