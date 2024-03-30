@@ -93,6 +93,7 @@ static void button_interrupt_handler(unsigned int gpio, unsigned int event, void
                 break;
             case FlashRed:
                 traffic_info.current_mode = Normal;
+                ncycles = 1;
                 break;
             default:
                 printk(KERN_ALERT "Mode change failed");
@@ -109,21 +110,39 @@ static void button_interrupt_handler(unsigned int gpio, unsigned int event, void
 static void timer_callback(unsigned int data) {
     switch (traffic_info.current_mode) {
         case Normal:
-            if (traffic_info.pedestrian_btn) {
-                
-            } else {
-                
+            if (ncycles < 4) { //Start with 3 cycles of green
+                gpio_set_value(LED_RED, 0);
+                gpio_set_value(LED_YELLOW, 0);
+                gpio_set_value(LED_GREEN, 1);
+            } else if (ncycles < 5) { //Then 1 cycle of yellow
+                gpio_set_value(LED_RED, 0);
+                gpio_set_value(LED_YELLOW, 1);
+                gpio_set_value(LED_GREEN, 0);
+            } else { //If pedestrian, 5 cycles red & yellow: else, 2 cycles red
+                if (traffic_info.pedestrian_btn && ncycles < 9) {
+                    gpio_set_value(LED_RED, 1);
+                    gpio_set_value(LED_YELLOW, 1);
+                    gpio_set_value(LED_GREEN, 0);
+                } else if (ncycles < 6) {
+                    gpio_set_value(LED_RED, 1);
+                    gpio_set_value(LED_YELLOW, 0);
+                    gpio_set_value(LED_GREEN, 0);
+                } else //This is an extra cycle added to stop light, so removed 1 cycle from 2 prior ifs
+                    ncycles = 0;
             }
+            ncycles++;
             break;
         case FlashYellow:
-            
+            gpio_set_value(LED_RED, 0);
+            gpio_set_value(LED_YELLOW, !gpio_get_value(LED_YELLOW));
+            gpio_set_value(LED_GREEN, 0);
             break;
         case FlashRed:
-            
+            gpio_set_value(LED_RED, !gpio_get_value(LED_RED));
+            gpio_set_value(LED_YELLOW, 0);
+            gpio_set_value(LED_GREEN, 0);
             break;
     }
-
-    ncycles++;
     mod_timer(&timer, jiffies + msecs_to_jiffies(traffic_info.cycle_rate));    
 }
 
@@ -149,7 +168,7 @@ static int kmod_init(void) {
     /* Start a timer to measure cycle length */
     timer_setup(&timer, timer_callback, 0);
     mod_timer(&timer, jiffies + msecs_to_jiffies(traffic_info.cycle_rate));
-    ncycles = 0;
+    ncycles = 1;
     
     /* Allocating nibbler for the buffer */
     nibbler_buffer = kmalloc(capacity, GFP_KERNEL); 
