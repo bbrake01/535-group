@@ -15,13 +15,23 @@
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Kernelspace Module for BeagleBone Traffic Controller");
+
 #define DEVICE_NAME "MY_TRAFFIC"
+//Define GPIO pinout
+#define LED_RED 67
+#define LED_YELLOW 68
+#define LED_GREEN 44
+#define BTN0 26
+#define BTN1 46
+
 enum op_mode{Normal, FlashRed, FlashYellow};
 
 static ssize_t traffic_read(struct file *filp, char *buf, size_t count, loff_t *f_pos);
 static ssize_t traffic_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos);
 static int kmod_init(void);
 static void kmod_exit(void);
+static void gpio_init(void);
+static void button_interrupt_handler(unsigned int gpio, unsigned int event, void *data);
 const char* op_mode_to_string(enum op_mode mode);
 
 /*fops and status structs */
@@ -47,9 +57,50 @@ static char *nibbler_buffer;
 /* length of the current message */
 static int nibbler_len;
 
+/* Function to init GPIO pins */
+void gpio_init(void) {
+    //Initialize LED pins as outputs
+    gpio_request(LED_GREEN, "green");
+    gpio_direction_output(LED_GREEN, 0);
+    gpio_request(LED_YELLOW, "yellow");
+    gpio_direction_output(LED_YELLOW, 0);
+    gpio_request(LED_RED, "red");
+    gpio_direction_output(LED_RED, 0);
+
+    // Initialize button pins as inputs
+    gpio_request(BTN0, "btn0");
+    gpio_direction_input(BTN0);
+    gpio_request(BTN1, "btn1");
+    gpio_direction_input(BTN_1_PIN);
+}
+
+/* For button interrupts and changing states */
+void button_interrupt_handler(unsigned int gpio, unsigned int event, void *data) {
+    if (gpio == BTN0 && event == IRQF_TRIGGER_FALLING) {
+        switch (traffic_info.current_mode) {
+            case Normal:
+                traffic_info.current_mode = FlashYellow;
+                break;
+            case FlashYellow:
+                traffic_info.current_mode = FlashRed;
+                break;
+            case FlashRed:
+                traffic_info.current_mode = Normal;
+                break;
+            default:
+                printk(KERN_ALERT "Mode change failed");
+        }
+    } else if (gpio == BTN1 && event == IRQF_TRIGGER_FALLING) {
+        if (traffic_info.current_mode == Normal && traffic_info.pedestrian_btn == FALSE) {
+            traffic_info.pedestrian_btn = TRUE;
+        }
+    }   
+}
+
 /* km base functions */
 static int kmod_init(void) {
     int result;
+    
     /* Registering chr device */
     result = register_chrdev(traffic_major, DEVICE_NAME, &traffic_fops);
     if (result < 0)
@@ -58,7 +109,12 @@ static int kmod_init(void) {
             "Cannot obtain major number (failed to register) %d\n", traffic_major);
         return result;
     }
-
+    
+    /* Initialize GPIO pins and button interrupt handlers */
+    gpio_init();
+    gpio_request_irq(BTN0, button_interrupt_handler, IRQF_TRIGGER_FALLING, "btn0", NULL);
+    gpio_request_irq(BTN1, button_interrupt_handler, IRQF_TRIGGER_FALLING, "btn1", NULL);
+    
     /* Allocating nibbler for the buffer */
     nibbler_buffer = kmalloc(capacity, GFP_KERNEL); 
     if (!nibbler_buffer)
@@ -66,7 +122,7 @@ static int kmod_init(void) {
         printk(KERN_ALERT "Insufficient kernel memory\n"); 
         result = -ENOMEM;
         goto fail; 
-    } 
+    }
     memset(nibbler_buffer, 0, capacity);
     nibbler_len = 0;
 
@@ -172,7 +228,6 @@ const char* op_mode_to_string(enum op_mode mode) {
     }
 }
 
-
 /*
 GPIO Pinout
 Red Light: 67
@@ -181,10 +236,7 @@ Green Light: 44
 
 Button0 (switch modes): 26
 Button1 (pedestrian): 46
-
-
 */
-
 
 /*
 Important GPIO functions
@@ -198,10 +250,5 @@ void gpio_set_value(unsigned int gpio, int value); //set output pin
 int gpio_to_irq(unsigned int gpio); //generate interrupt
 */
 
-
 module_init(kmod_init);
 module_exit(kmod_exit);
-
-
-
-
