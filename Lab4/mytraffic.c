@@ -276,7 +276,7 @@ static ssize_t traffic_write(struct file *filp, const char *buf, size_t count, l
     printk(KERN_INFO "TBUF STORED INFO: %s\n", tbuf);
 
     /* use tbuf value to set cycle_rate, will change to type int later */
-    // Be sure to set cycle_rate in milliseconds here
+    // Be sure to set cycle_rate in milliseconds here (see mod_timer)
     
     return count;
 }
