@@ -17,7 +17,7 @@
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Kernelspace Module for BeagleBone Traffic Controller");
-#define DEBUG 0
+#define DEBUG 1
 #define DEVICE_NAME "MY_TRAFFIC"
 // Define GPIO pinout
 #define LED_RED 67
@@ -148,6 +148,9 @@ static void timer_callback(struct timer_list *t) {
                 gpio_set_value(LED_RED, 0);
                 gpio_set_value(LED_YELLOW, 0);
                 gpio_set_value(LED_GREEN, 1);
+                traffic_info.green_status = true;
+                traffic_info.yellow_status = false;
+                traffic_info.red_status = false;
                 #if DEBUG
                 printk(KERN_ALERT "Normal - Green\n");
                 #endif
@@ -155,21 +158,30 @@ static void timer_callback(struct timer_list *t) {
                 gpio_set_value(LED_RED, 0);
                 gpio_set_value(LED_YELLOW, 1);
                 gpio_set_value(LED_GREEN, 0);
+                traffic_info.green_status = false;
+                traffic_info.yellow_status = true;
+                traffic_info.red_status = false;
                 #if DEBUG
                 printk(KERN_ALERT "Normal - Yellow\n");
                 #endif
             } else 
-                if (traffic_info.pedestrian_btn && ncycles < 8) { // Red for 2 cycles
+                if (traffic_info.pedestrian_btn && ncycles < 8) {
                     gpio_set_value(LED_RED, 1);
                     gpio_set_value(LED_YELLOW, 1);
                     gpio_set_value(LED_GREEN, 0);
+                    traffic_info.green_status = false;
+                    traffic_info.yellow_status = true;
+                    traffic_info.red_status = true;
                     #if DEBUG
                     printk(KERN_ALERT "Normal Pedestrian - Red\n");
                     #endif
-                } else if (ncycles <= 5) {
+                } else if (ncycles <= 5) {  // Red for 2 cycles
                     gpio_set_value(LED_RED, 1);
                     gpio_set_value(LED_YELLOW, 0);
                     gpio_set_value(LED_GREEN, 0);
+                    traffic_info.green_status = false;
+                    traffic_info.yellow_status = true;
+                    traffic_info.red_status = false;
                     #if DEBUG
                     printk(KERN_ALERT "Normal - Red\n");
                     #endif
@@ -184,6 +196,9 @@ static void timer_callback(struct timer_list *t) {
             gpio_set_value(LED_RED, 0);
             gpio_set_value(LED_YELLOW, !gpio_get_value(LED_YELLOW));
             gpio_set_value(LED_GREEN, 0);
+            traffic_info.green_status = false;
+            traffic_info.yellow_status = true;
+            traffic_info.red_status = false;
             #if DEBUG
             printk(KERN_ALERT "Flash Yellow Mode\n");
             #endif
@@ -193,6 +208,9 @@ static void timer_callback(struct timer_list *t) {
             gpio_set_value(LED_RED, !gpio_get_value(LED_RED));
             gpio_set_value(LED_YELLOW, 0);
             gpio_set_value(LED_GREEN, 0);
+            traffic_info.green_status = false;
+            traffic_info.yellow_status = false;
+            traffic_info.red_status = true;
             #if DEBUG
             printk(KERN_ALERT "Flash Red Mode\n");
             #endif
