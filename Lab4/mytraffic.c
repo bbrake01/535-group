@@ -12,10 +12,14 @@
 #include <linux/jiffies.h>
 #include <asm/uaccess.h>
 #include <linux/gpio.h> //for working with GPIO
+#include <linux/interrupt.h> // or interrupt handling
+#include <linux/string.h>
+
+
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Kernelspace Module for BeagleBone Traffic Controller");
-
+#define DEBUG 0
 #define DEVICE_NAME "MY_TRAFFIC"
 // Define GPIO pinout
 #define LED_RED 67
@@ -31,8 +35,8 @@ static ssize_t traffic_write(struct file *filp, const char *buf, size_t count, l
 static int kmod_init(void);
 static void kmod_exit(void);
 static void gpio_init(void);
-static void button_interrupt_handler(unsigned int gpio, unsigned int event, void *data);
-static void timer_callback(unsigned int data);
+irqreturn_t button_interrupt_handler(int irq, void *data);
+static void timer_callback(struct timer_list* t);
 const char* op_mode_to_string(enum op_mode mode);
 
 /* fops and status structs */
@@ -62,9 +66,14 @@ static char *nibbler_buffer;
 /* length of the current message */
 static int nibbler_len;
 
+/* gpio interrupt setup */
+int btn0_irq_number;
+int btn1_irq_number;
+void *dev_id = NULL;
 
 /* Function to init GPIO pins */
 static void gpio_init(void) {
+
     //Initialize LED pins as outputs
     gpio_request(LED_GREEN, "green");
     gpio_direction_output(LED_GREEN, 0);
@@ -78,74 +87,94 @@ static void gpio_init(void) {
     gpio_direction_input(BTN0);
     gpio_request(BTN1, "btn1");
     gpio_direction_input(BTN1);
-}
 
+    btn0_irq_number = gpio_to_irq(BTN0);
+    if (btn0_irq_number < 0) {
+        printk(KERN_ERR "Failed to get IRQ number for BTN0\n");
+    }
+
+    // Request IRQ
+    if (request_irq(btn0_irq_number, button_interrupt_handler, IRQF_SHARED, "my_gpio_button", dev_id)) {
+        printk(KERN_ERR "Failed to request IRQ for BTN0\n");
+    }
+
+    btn1_irq_number = gpio_to_irq(BTN1);
+    if (btn1_irq_number < 0) {
+        printk(KERN_ERR "Failed to get IRQ number for BTN1\n");
+    }
+
+    // Request IRQ
+    if (request_irq(btn1_irq_number, button_interrupt_handler, IRQF_SHARED, "my_gpio_button", dev_id)) {
+        printk(KERN_ERR "Failed to request IRQ for BTN1\n");
+    }
+}
 
 /* For button interrupts and changing states */
-static void button_interrupt_handler(unsigned int gpio, unsigned int event, void *data) {
-    if (gpio == BTN0 && event == IRQF_TRIGGER_FALLING) {
-        switch (traffic_info.current_mode) { // Mode rotation: Normal -> Yellow -> Red
-            case Normal:
-                traffic_info.current_mode = FlashYellow;
-                break;
-            case FlashYellow:
-                traffic_info.current_mode = FlashRed;
-                break;
-            case FlashRed:
-                traffic_info.current_mode = Normal;
-                ncycles = 1;
-                break;
-            default:
-                printk(KERN_ALERT "Mode change failed");
+ irqreturn_t button_interrupt_handler(int irq, void *dev_id) {
+     
+     if (irq == btn0_irq_number) {
+        // Handle BTN0 press: Cycle through operational modes
+        if (traffic_info.current_mode == FlashYellow) {
+            traffic_info.current_mode = FlashRed;
+        } else if (traffic_info.current_mode == FlashRed) {
+            traffic_info.current_mode = Normal;
+        } else {
+            traffic_info.current_mode = FlashYellow;
         }
-    } else if (gpio == BTN1 && event == IRQF_TRIGGER_FALLING) {
-        if (traffic_info.current_mode == Normal && traffic_info.pedestrian_btn == FALSE) {
-            traffic_info.pedestrian_btn = TRUE;
+    } else if (irq == btn1_irq_number) {
+        // Handle BTN1 press: Activate pedestrian logic if in Normal mode
+        if (traffic_info.current_mode == Normal) {
+            traffic_info.pedestrian_btn = true;
         }
     }   
+
+    return IRQ_HANDLED;
 }
 
-
 /* Control cycles using timer */
-static void timer_callback(unsigned int data) {
+//reworked the syntax a little
+static void timer_callback(struct timer_list *t) {
     switch (traffic_info.current_mode) {
         case Normal:
-            if (ncycles < 4) { //Start with 3 cycles of green
+            if (ncycles <= 3) { // Green for 3 cycles
                 gpio_set_value(LED_RED, 0);
                 gpio_set_value(LED_YELLOW, 0);
                 gpio_set_value(LED_GREEN, 1);
-            } else if (ncycles < 5) { //Then 1 cycle of yellow
+            } else if (ncycles == 4) { // Yellow for 1 cycle
                 gpio_set_value(LED_RED, 0);
                 gpio_set_value(LED_YELLOW, 1);
                 gpio_set_value(LED_GREEN, 0);
-            } else { //If pedestrian, 5 cycles red & yellow: else, 2 cycles red
-                if (traffic_info.pedestrian_btn && ncycles < 9) {
+            } else 
+                if (traffic_info.pedestrian_btn && ncycles < 9) { // Red for 2 cycles
                     gpio_set_value(LED_RED, 1);
                     gpio_set_value(LED_YELLOW, 1);
                     gpio_set_value(LED_GREEN, 0);
-                } else if (ncycles < 6) {
+                } else if (ncycles <= 6) {
                     gpio_set_value(LED_RED, 1);
                     gpio_set_value(LED_YELLOW, 0);
                     gpio_set_value(LED_GREEN, 0);
-                } else //This is an extra cycle added to stop light, so removed 1 cycle from 2 prior ifs
+                } else { //This is an extra cycle added to stop light, so removed 1 cycle from 2 prior ifs
                     ncycles = 0;
-            }
+                    traffic_info.pedestrian_btn = false; // reset pedestrian_btn back to false after 5 cycles
+                } 
             ncycles++;
             break;
+
         case FlashYellow:
             gpio_set_value(LED_RED, 0);
             gpio_set_value(LED_YELLOW, !gpio_get_value(LED_YELLOW));
             gpio_set_value(LED_GREEN, 0);
             break;
+
         case FlashRed:
             gpio_set_value(LED_RED, !gpio_get_value(LED_RED));
             gpio_set_value(LED_YELLOW, 0);
             gpio_set_value(LED_GREEN, 0);
             break;
     }
-    mod_timer(&timer, jiffies + msecs_to_jiffies(traffic_info.cycle_rate));    
-}
 
+    mod_timer(&timer, jiffies + msecs_to_jiffies(1000*traffic_info.cycle_rate));    
+}
 
 /* km base functions */
 static int kmod_init(void) {
@@ -161,14 +190,8 @@ static int kmod_init(void) {
     }
     
     /* Initialize GPIO pins and button interrupt handlers */
-    gpio_init();
-    gpio_request_irq(BTN0, button_interrupt_handler, IRQF_TRIGGER_FALLING, "btn0", NULL);
-    gpio_request_irq(BTN1, button_interrupt_handler, IRQF_TRIGGER_FALLING, "btn1", NULL);
+    gpio_init(); // wasn't compiling so re worked and added request_irq in gpio_init function*/
 
-    /* Start a timer to measure cycle length */
-    timer_setup(&timer, timer_callback, 0);
-    mod_timer(&timer, jiffies + msecs_to_jiffies(traffic_info.cycle_rate));
-    ncycles = 1;
     
     /* Allocating nibbler for the buffer */
     nibbler_buffer = kmalloc(capacity, GFP_KERNEL); 
@@ -181,20 +204,26 @@ static int kmod_init(void) {
     memset(nibbler_buffer, 0, capacity);
     nibbler_len = 0;
 
-    printk(KERN_ALERT "Inserting traffic module\n");
-
     /* Set default traffic light parameters */
     traffic_info.current_mode = Normal;
     traffic_info.cycle_rate = 1;
     traffic_info.pedestrian_btn = false;
+
+    /* Start a timer to measure cycle length */
+    timer_setup(&timer, timer_callback, 0);
+    mod_timer(&timer, jiffies + msecs_to_jiffies(1000*traffic_info.cycle_rate));
+    ncycles = 1;
     
+    #if DEBUG
+    printk(KERN_ALERT "Inserting traffic module\n");
+    #endif
+
     return result;
 
     fail: 
     kmod_exit(); 
     return result;
 }
-
 
 static void kmod_exit(void) {
         
@@ -210,7 +239,9 @@ static void kmod_exit(void) {
     gpio_free(LED_RED);
     gpio_free(BTN0);
     gpio_free(BTN1);
-    
+    free_irq(btn0_irq_number, NULL);
+    free_irq(btn1_irq_number, NULL);
+
     /* Freeing buffer memory */
     if (nibbler_buffer)
     {
@@ -218,31 +249,58 @@ static void kmod_exit(void) {
     }
 }
 
-
 static ssize_t traffic_read(struct file *filp, char *buf, size_t count, loff_t *f_pos) {
-    
+
+    char temp_buffer[256];
+    int len;
+
+    #if DEBUG
     printk(KERN_ALERT "Chr dev read from\n");
+    #endif
 
-    printk(KERN_ALERT "Current Operational Mode %s\n", op_mode_to_string(traffic_info.current_mode));
-    printk(KERN_ALERT "Current Cycle Rate %d\n", traffic_info.cycle_rate);
+    if (*f_pos > 0) {
+        // The position is non-zero, which means end of file reached, return 0 to indicate EOF
+        return 0;
+    }
     
-    printk(KERN_ALERT "Current Light Status: \n");
-    printk(KERN_ALERT "Green: %s\n", traffic_info.green_status ? "on" : "off");
-    printk(KERN_ALERT "Yellow: %s\n", traffic_info.yellow_status ? "on" : "off");
-    printk(KERN_ALERT "Red: %s\n", traffic_info.red_status ? "on" : "off");
+    len = snprintf(temp_buffer, sizeof(temp_buffer),
+        "Current Operational Mode: %s\n"
+        "Current Cycle Rate: %d\n"
+        "Light Status - Green: %s, Yellow: %s, Red: %s\n"
+        "Pedestrian Present? %s\n",
+        op_mode_to_string(traffic_info.current_mode),
+        traffic_info.cycle_rate,
+        traffic_info.green_status ? "on" : "off",
+        traffic_info.yellow_status ? "on" : "off",
+        traffic_info.red_status ? "on" : "off",
+        traffic_info.pedestrian_btn ? "Yes" : "No"
+    );
+    
+    // Prevent buffer overflow, copy only what can fit into user buffer
+    if (count < len) len = count;
 
-    printk(KERN_ALERT "Pedestrian Present?\n");
-    printk(KERN_ALERT "%s\n", traffic_info.pedestrian_btn ? "Yes" : "No");
+    // Copy the formatted string to user space
+    if (copy_to_user(buf, temp_buffer, len)) {
+        return -EFAULT;
+    }
 
-    return count;
+    // Update the file position to indicate that the data has been read
+    *f_pos += len;
+
+    // Return the number of bytes read
+    return len;
 }
 
 
 static ssize_t traffic_write(struct file *filp, const char *buf, size_t count, loff_t *f_pos) {
 
-    int temp;
+    int temp, value = 1;
+    size_t true_len = count;
     char tbuf[256], *tbptr = tbuf;
+
+    #if DEBUG
     printk(KERN_ALERT "Chr dev written to\n");
+    #endif
 
     /* end of buffer reached */
     if (*f_pos >= capacity)
@@ -262,6 +320,7 @@ static ssize_t traffic_write(struct file *filp, const char *buf, size_t count, l
 
     /* Copy data from user buffer to kernel buffer */
     if (copy_from_user(nibbler_buffer + *f_pos, buf, count)) {
+        printk(KERN_ALERT "Error copying data\n");
         return -EFAULT;  // Error copying data from user space
     }
 
@@ -273,14 +332,38 @@ static ssize_t traffic_write(struct file *filp, const char *buf, size_t count, l
     *f_pos += count;
     nibbler_len = *f_pos;
 
-    printk(KERN_INFO "TBUF STORED INFO: %s\n", tbuf);
+    #if DEBUG
+    printk(KERN_ALERT "TBUF STORED INFO: %s\n", tbuf);
+    #endif
+
+    if (tbuf[true_len-1] == '\n') {
+        true_len -= 1;
+    }
+
+    if (true_len>= 2) {
+        // Convert two-digit number
+        value = (tbuf[0] - '0') * 10 + (tbuf[1] - '0');
+    } else if (true_len == 1) {
+        // Convert single-digit number
+        value = tbuf[0] - '0';
+    }
+
+    #if DEBUG
+    printk(KERN_ALERT "Value is: %d\n", value);
+    #endif
 
     /* use tbuf value to set cycle_rate, will change to type int later */
     // Be sure to set cycle_rate in milliseconds here (see mod_timer)
+
+    if( value >= 1 && value <= 9){
+        traffic_info.cycle_rate = value;
+    }
+    else {
+        printk(KERN_ALERT "Please set a cycle rate between 1:9\n");
+    }
     
     return count;
 }
-
 
 /* km helper functions */
 const char* op_mode_to_string(enum op_mode mode) {
