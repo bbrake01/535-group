@@ -17,7 +17,7 @@
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Kernelspace Module for BeagleBone Traffic Controller");
-#define DEBUG 1
+#define DEBUG 0
 #define DEVICE_NAME "MY_TRAFFIC"
 // Define GPIO pinout
 #define LED_RED 67
@@ -86,31 +86,33 @@ static void gpio_init(void) {
     gpio_request(BTN1, "btn1");
     gpio_direction_input(BTN1);
 
+
+	/* BTN0 SETUP */
     btn0_irq_number = gpio_to_irq(BTN0);
     if (btn0_irq_number < 0) {
         printk(KERN_ERR "Failed to get IRQ number for BTN0\n");
     }
-
     // Request IRQ
-    if (request_irq(btn0_irq_number, button_interrupt_handler, IRQF_SHARED, "my_gpio_button", dev_id)) {
+    if (request_irq(btn0_irq_number, button_interrupt_handler, IRQF_TRIGGER_RISING, "my_gpio_button", dev_id)) {
         printk(KERN_ERR "Failed to request IRQ for BTN0\n");
     }
 
+	/* BTN1 SETUP */
     btn1_irq_number = gpio_to_irq(BTN1);
     if (btn1_irq_number < 0) {
         printk(KERN_ERR "Failed to get IRQ number for BTN1\n");
     }
-
     // Request IRQ
-    if (request_irq(btn1_irq_number, button_interrupt_handler, IRQF_SHARED, "my_gpio_button", dev_id)) {
+    if (request_irq(btn1_irq_number, button_interrupt_handler, IRQF_TRIGGER_RISING, "my_gpio_button", dev_id)) {
         printk(KERN_ERR "Failed to request IRQ for BTN1\n");
     }
+
 }
 
 /* For button interrupts and changing states */
  irqreturn_t button_interrupt_handler(int irq, void *dev_id) {
      
-     if (irq == btn0_irq_number) {
+	if (irq == btn0_irq_number) {
         // Handle BTN0 press: Cycle through operational modes
         if (traffic_info.current_mode == FlashYellow) {
             traffic_info.current_mode = FlashRed;
@@ -135,6 +137,19 @@ static void gpio_init(void) {
             traffic_info.pedestrian_btn = true;
         }
     }   
+
+	while (gpio_get_value(BTN0) && gpio_get_value(BTN1)) {
+		gpio_set_value(LED_RED, 1);
+		gpio_set_value(LED_YELLOW, 1);
+		gpio_set_value(LED_GREEN, 1);
+		traffic_info.current_mode = Normal;
+		traffic_info.cycle_rate = 1;
+		ncycles = 1;
+		traffic_info.pedestrian_btn = false;
+        traffic_info.green_status = true;
+        traffic_info.yellow_status = true;
+        traffic_info.red_status = true;		
+	}
 
     return IRQ_HANDLED;
 }
@@ -188,7 +203,7 @@ static void timer_callback(struct timer_list *t) {
                 } else { //This is an extra cycle added to stop light, so removed 1 cycle from 2 prior ifs
                     ncycles = 0;
                     traffic_info.pedestrian_btn = false; // reset pedestrian_btn back to false after 5 cycles
-                } 
+                }
             ncycles++;
             break;
 
