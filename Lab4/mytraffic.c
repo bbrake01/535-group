@@ -15,8 +15,6 @@
 #include <linux/interrupt.h> // or interrupt handling
 #include <linux/string.h>
 
-
-
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Kernelspace Module for BeagleBone Traffic Controller");
 #define DEBUG 0
@@ -116,10 +114,20 @@ static void gpio_init(void) {
         // Handle BTN0 press: Cycle through operational modes
         if (traffic_info.current_mode == FlashYellow) {
             traffic_info.current_mode = FlashRed;
+            #if DEBUG
+            printk(KERN_ALERT "Button to Flash Red Mode\n");
+            #endif
         } else if (traffic_info.current_mode == FlashRed) {
             traffic_info.current_mode = Normal;
+            ncycles = 1;
+            #if DEBUG
+            printk(KERN_ALERT "Button to Normal Mode\n");
+            #endif
         } else {
             traffic_info.current_mode = FlashYellow;
+            #if DEBUG
+            printk(KERN_ALERT "Button to Flash Yellow Mode\n");
+            #endif
         }
     } else if (irq == btn1_irq_number) {
         // Handle BTN1 press: Activate pedestrian logic if in Normal mode
@@ -140,19 +148,31 @@ static void timer_callback(struct timer_list *t) {
                 gpio_set_value(LED_RED, 0);
                 gpio_set_value(LED_YELLOW, 0);
                 gpio_set_value(LED_GREEN, 1);
+                #if DEBUG
+                printk(KERN_ALERT "Normal - Green\n");
+                #endif
             } else if (ncycles == 4) { // Yellow for 1 cycle
                 gpio_set_value(LED_RED, 0);
                 gpio_set_value(LED_YELLOW, 1);
                 gpio_set_value(LED_GREEN, 0);
+                #if DEBUG
+                printk(KERN_ALERT "Normal - Yellow\n");
+                #endif
             } else 
-                if (traffic_info.pedestrian_btn && ncycles < 9) { // Red for 2 cycles
+                if (traffic_info.pedestrian_btn && ncycles < 8) { // Red for 2 cycles
                     gpio_set_value(LED_RED, 1);
                     gpio_set_value(LED_YELLOW, 1);
                     gpio_set_value(LED_GREEN, 0);
-                } else if (ncycles <= 6) {
+                    #if DEBUG
+                    printk(KERN_ALERT "Normal Pedestrian - Red\n");
+                    #endif
+                } else if (ncycles <= 5) {
                     gpio_set_value(LED_RED, 1);
                     gpio_set_value(LED_YELLOW, 0);
                     gpio_set_value(LED_GREEN, 0);
+                    #if DEBUG
+                    printk(KERN_ALERT "Normal - Red\n");
+                    #endif
                 } else { //This is an extra cycle added to stop light, so removed 1 cycle from 2 prior ifs
                     ncycles = 0;
                     traffic_info.pedestrian_btn = false; // reset pedestrian_btn back to false after 5 cycles
@@ -164,12 +184,18 @@ static void timer_callback(struct timer_list *t) {
             gpio_set_value(LED_RED, 0);
             gpio_set_value(LED_YELLOW, !gpio_get_value(LED_YELLOW));
             gpio_set_value(LED_GREEN, 0);
+            #if DEBUG
+            printk(KERN_ALERT "Flash Yellow Mode\n");
+            #endif
             break;
 
         case FlashRed:
             gpio_set_value(LED_RED, !gpio_get_value(LED_RED));
             gpio_set_value(LED_YELLOW, 0);
             gpio_set_value(LED_GREEN, 0);
+            #if DEBUG
+            printk(KERN_ALERT "Flash Red Mode\n");
+            #endif
             break;
     }
 
