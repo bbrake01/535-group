@@ -1,0 +1,75 @@
+/*
+* Copyright(C) 2016 Texas Instruments Incorporated- http://www.ti.com/
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*/
+
+&am33xx_pinmux {
+ mcasp1_pins: mcasp1_pins{
+  pinctrl-single,pins = <
+   /* sink must enable receivers */
+   AM33XX_IOPAD(0x9a0, PIN_INPUT_PULLDOWN | MUX_MODE3) /* P9_42 mcasp1_aclkx - bit clock */
+   AM33XX_IOPAD(0x9a4, PIN_INPUT_PULLDOWN | MUX_MODE3) /* P9_27 mcasp1_fsx - frame sync */
+   AM33XX_IOPAD(0x9a8, PIN_INPUT_PULLDOWN | MUX_MODE3) /* P9_41 mcasp1_axr0 - i2s input */
+  >;
+ };
+};
+
+&mcasp1 {
+ #sound-dai-cells = <0>;
+ pinctrl-names = "default";
+ pinctrl-0 = <&mcasp1_pins>;
+ status = "okay";
+ op-mode = <0>; /* MCASP_IIS_MODE */
+ tdm-slots = <2>;
+ num-serializer = <4>;
+ serial-dir = < /* 1 TX 2 RX 0 unused */
+  2 1 0 0
+ >;
+ rx-num-evt = <32>;
+ tx-num-evt = <32>;
+};
+
+/ {
+ pcm5102a: pcm5102a {
+  #sound-dai-cells = <0>;
+  compatible = "ti,pcm5102a";
+  status = "okay";
+ };
+
+clk_mcasp1_fixed: clk_mcasp1_fixed {
+  #clock-cells = <0>;
+  compatible = "fixed-clock";
+  clock-frequency = <24576000>;
+ };
+
+clk_mcasp1: clk_mcasp1 {
+  #clock-cells = <0>;
+  compatible = "gpio-gate-clock";
+  clocks = <&clk_mcasp1_fixed>;
+  enable-gpios = <&gpio1 27 0>; /* BeagleBone Black Clk enable on GPIO1_27 */
+ };
+
+sound1:sound@1 {
+  compatible = "simple-audio-card";
+  simple-audio-card,name = "PCM5102a";
+  simple-audio-card,format = "i2s";
+  simple-audio-card,bitclock-master = <&sound1_master>;
+  simple-audio-card,frame-master = <&sound1_master>;
+  simple-audio-card,bitclock-inversion;
+
+sound1_master: simple-audio-card,cpu {
+   sound-dai = <&mcasp1>;
+   system-clock-direction = "out";
+   system-clock-frequency = <24576000>;
+   clocks = <&clk_mcasp1>;
+  };
+  
+  simple-audio-card,codec{
+   sound-dai = <&pcm5102a>;
+   #sound-dai-cells = <0>;
+  };
+ };
+};
