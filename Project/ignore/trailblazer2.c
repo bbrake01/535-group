@@ -15,8 +15,6 @@
 #include <linux/interrupt.h> // or interrupt handling
 #include <linux/hrtimer.h> // high resolution timer
 #include <linux/io.h>
-#include <linux/ktime.h>
-#include <linux/delay.h>
 
 #define CM_PER_BASE 0x44E10000  // Base address for Control Module peripherals
 #define MCASP0_FSR_OFFSET 0x88c
@@ -26,29 +24,20 @@
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("BeagleBone Controller for Sound Activated RC Car");
-#define DEBUG 1
+#define DEBUG 0
 #define DEVICE_NAME "TRAILBLAZER"
 
 /* Define GPIO pinout */
 #define MIC1 65
-#define TRIG_PIN 51
-#define ECHO_PIN 116
 
 
 /* function Declarations */ 
 static void set_pin_mode(u32 offset, u8 mode);
 static int kmod_init(void);
 static void kmod_exit(void);
-static void gpio_init(void);
 static void timer_callback(struct timer_list* t);
-static irqreturn_t echo_isr(int irq, void *data);
-static void init_echo_irq(void);
 
-/* struct & global var declarations */
 static struct timer_list timer;
-static ktime_t echo_start, echo_end;
-static bool measuring = false;
-static int irq_echo;
 
 
 static void set_pin_mode(u32 offset, u8 mode) {
@@ -70,39 +59,12 @@ static void set_pin_mode(u32 offset, u8 mode) {
     iounmap(reg);
 }
 
-static irqreturn_t echo_isr(int irq, void *data) {
-    s64 time_elapsed;
-    int distance;
-    
-    if (gpio_get_value(ECHO_PIN)) {
-        // Rising edge detected, start the timer
-        echo_start = ktime_get();
-        measuring = true;
-    } else if (measuring) {
-        // Falling edge detected, stop the timer and calculate distance
-        echo_end = ktime_get();
-        time_elapsed = ktime_to_us(ktime_sub(echo_end, echo_start));
-        distance = (int)(time_elapsed); // Speed of sound is 340 m/s and divide by 2 (to and fro)
+static int kmod_init(void) {
+	
+	printk(KERN_ALERT "Initializing module\n");
 
-        printk(KERN_ALERT "Distance: %d\n", distance);
-        measuring = false;
-    }
-    return IRQ_HANDLED;
-}
-
-static void init_echo_irq(void) {
-    int result;
-    irq_echo = gpio_to_irq(ECHO_PIN);
-    result = request_irq(irq_echo, echo_isr, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "echo_irq_handler", NULL);
-    if (result) {
-        printk(KERN_ERR "Unable to request IRQ: %d\n", result);
-    }
-}
-
-static void gpio_init(void) {
-
-    //mic
-    set_pin_mode(MCASP0_FSR_OFFSET, 6);
+    // Example to set P8_37 to mode 3 (uart2_ctsn)
+    set_pin_mode(MCASP0_FSR_OFFSET, 6); // Offset for P8_37, mode 3
     set_pin_mode(MCASP0_AXR1_OFFSET, 3);
     set_pin_mode(MCASP0_AHCLKR_OFFSET, 3);
     set_pin_mode(MCASP0_ACLKR_OFFSET, 3);
@@ -110,57 +72,31 @@ static void gpio_init(void) {
     gpio_request(MIC1, "mic1");
     gpio_direction_input(MIC1);
 
-    //distance sensor
-    gpio_request(TRIG_PIN, "trig");
-    gpio_direction_output(TRIG_PIN, 0);
-    gpio_request(ECHO_PIN, "echo");
-    gpio_direction_input(ECHO_PIN);
-    init_echo_irq();
-}
-
-
-static int kmod_init(void) {
-	
-	printk(KERN_ALERT "Initializing module\n");
-
-    gpio_init();
-
+    printk(KERN_ALERT "Before timer setup\n");
     timer_setup(&timer, timer_callback, 0);
-    mod_timer(&timer, jiffies + msecs_to_jiffies(500));
+    mod_timer(&timer, jiffies + msecs_to_jiffies(1000));
+    printk(KERN_ALERT "after timer setup\n");
 
-    printk(KERN_ALERT "Module loaded\n");
-    
     return 0;
 }
 
 static void timer_callback(struct timer_list *t)
 {
-    // Trigger HC-SR04
-    gpio_set_value(TRIG_PIN, 1);
-    udelay(10);
-    gpio_set_value(TRIG_PIN, 0);
-
-    #if DEBUG
-	printk(KERN_ALERT "in timer loop ");
-    #endif
-
+	printk(KERN_ALERT "in timer loop\n");
     printk(KERN_ALERT "Mic reading: %d\n", gpio_get_value(MIC1));
-    
-	mod_timer(&timer, jiffies + msecs_to_jiffies(500));  
+	mod_timer(&timer, jiffies + msecs_to_jiffies(1000));  
 }
 
 static void kmod_exit(void) {
-	
-    free_irq(irq_echo, NULL);
-    gpio_free(MIC1);
-    gpio_free(TRIG_PIN);
-    gpio_free(ECHO_PIN);
-    printk(KERN_ALERT "Exiting module\n");
+	printk(KERN_ALERT "Exiting module\n");
 }
 
 
 module_init(kmod_init);
 module_exit(kmod_exit);
+
+
+
 
 
 
