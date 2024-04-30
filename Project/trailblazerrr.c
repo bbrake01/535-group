@@ -19,10 +19,9 @@
 #include <linux/delay.h>
 
 #define CM_PER_BASE 0x44E10000  // Base address for Control Module peripherals
-#define MCASP0_FSR_OFFSET 0x88c
-#define MCASP0_AXR1_OFFSET 0x8d8
-#define MCASP0_AHCLKR_OFFSET 0x8cc
-#define MCASP0_ACLKR_OFFSET 0x8d0
+#define MCASP0_FSR_OFFSET 0x9a4
+#define MCASP0_AXR1_OFFSET 0x9a8
+#define MCASP0_ACLKR_OFFSET 0x9a0
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("BeagleBone Controller for Sound Activated RC Car");
