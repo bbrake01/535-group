@@ -28,6 +28,7 @@ MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("BeagleBone Controller for Sound Activated RC Car");
 #define DEBUG 1
 #define DEVICE_NAME "TRAILBLAZER"
+#define THRESHOLD 20
 
 /* Define GPIO pinout */
 #define DOUT 116
@@ -53,7 +54,6 @@ static ktime_t echo_start, echo_end;
 static bool measuring = false;
 static int irq_echo;
 static int distance;
-static int threshold;
 
 
 static void set_pin_mode(u32 offset, u8 mode) {
@@ -156,17 +156,16 @@ static void timer_callback(struct timer_list *t)
 	gpio_set_value(LEDR, 0);
     gpio_set_value(LEDL, 0);
 	
-    while(distance<threshold)
+    while(distance<THRESHOLD)
     {
         gpio_set_value(LEDR, !gpio_get_value(LEDR));
-		gpio_set_value(LEDL, !gpio_get_value(LEDL));
+	gpio_set_value(LEDL, !gpio_get_value(LEDL));
         gpio_set_value(TRIG_PIN, 1);
         udelay(10);
         gpio_set_value(TRIG_PIN, 0);
     }
 
-    //turn OFF LED3
-    sound_direction();
+	sound_direction();
     
 	mod_timer(&timer, jiffies + msecs_to_jiffies(500));  
 }
