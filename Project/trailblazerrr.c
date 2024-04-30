@@ -31,8 +31,8 @@ MODULE_DESCRIPTION("BeagleBone Controller for Sound Activated RC Car");
 
 /* Define GPIO pinout */
 #define DOUT 116
-#define LEDR 
-#define LEDL 
+#define LEDR 49
+#define LEDL 117
 #define TRIG_PIN 51
 #define ECHO_PIN 48
 
