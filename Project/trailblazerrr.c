@@ -109,8 +109,7 @@ static void gpio_init(void) {
     //mic
     set_pin_mode(MCASP0_FSR_OFFSET, 6);
     set_pin_mode(MCASP0_AXR1_OFFSET, 3);
-    set_pin_mode(MCASP0_AHCLKR_OFFSET, 3);
-    set_pin_mode(MCASP0_ACLKR_OFFSET, 3);
+	set_pin_mode(MCASP0_ACLKR_OFFSET, 3);
 
 	//LEDs
 	gpio_request(LEDR, "LEDright");
