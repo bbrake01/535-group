@@ -171,7 +171,6 @@ static void timer_callback(struct timer_list *t)
 
 static void kmod_exit(void) {
     free_irq(irq_echo, NULL);
-    gpio_free(MIC1);
     gpio_free(TRIG_PIN);
     gpio_free(ECHO_PIN);
     gpio_free(LEDR);
