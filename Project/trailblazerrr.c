@@ -113,9 +113,6 @@ static void gpio_init(void) {
     set_pin_mode(MCASP0_AHCLKR_OFFSET, 3);
     set_pin_mode(MCASP0_ACLKR_OFFSET, 3);
 
-    gpio_request(MIC1, "mic1");
-    gpio_direction_input(MIC1);
-
 	//LEDs
 	gpio_request(LEDR, "LEDright");
 	gpio_direction_output(LEDR, 0);
@@ -157,7 +154,7 @@ static void timer_callback(struct timer_list *t)
     udelay(10);
     gpio_set_value(TRIG_PIN, 0);
 	gpio_set_value(LEDR, 0);
-	gpio_set_value(LEDL, 0);
+    gpio_set_value(LEDL, 0);
 	
     while(distance<threshold)
     {
@@ -170,11 +167,6 @@ static void timer_callback(struct timer_list *t)
 
     //turn OFF LED3
     sound_direction();
-
-    #if DEBUG
-	printk(KERN_ALERT "in timer loop ");
-    printk(KERN_ALERT "Mic reading: %d\n", gpio_get_value(MIC1));
-    #endif
     
 	mod_timer(&timer, jiffies + msecs_to_jiffies(500));  
 }
@@ -184,8 +176,8 @@ static void kmod_exit(void) {
     gpio_free(MIC1);
     gpio_free(TRIG_PIN);
     gpio_free(ECHO_PIN);
-	gpio_free(LEDR);
-	gpio_free(LEDL);
+    gpio_free(LEDR);
+    gpio_free(LEDL);
     printk(KERN_ALERT "Exiting module\n");
 }
 
