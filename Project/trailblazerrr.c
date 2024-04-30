@@ -30,16 +30,11 @@ MODULE_DESCRIPTION("BeagleBone Controller for Sound Activated RC Car");
 #define DEVICE_NAME "TRAILBLAZER"
 
 /* Define GPIO pinout */
-#define MIC1 116
-#define LED1
-#define MIC2
-#define LED2
+#define DOUT 116
+#define LEDR 
+#define LEDL 
 #define TRIG_PIN 51
 #define ECHO_PIN 48
-#define LED3
-
-
-
 
 /* function Declarations */ 
 static void set_pin_mode(u32 offset, u8 mode);
@@ -121,6 +116,12 @@ static void gpio_init(void) {
     gpio_request(MIC1, "mic1");
     gpio_direction_input(MIC1);
 
+	//LEDs
+	gpio_request(LEDR, "LEDright");
+	gpio_direction_output(LEDR, 0);
+	gpio_request(LEDL, "LEDleft");
+	gpio_direction_output(LEDL, 0);
+
     //distance sensor
     gpio_request(TRIG_PIN, "trig");
     gpio_direction_output(TRIG_PIN, 0);
@@ -155,11 +156,13 @@ static void timer_callback(struct timer_list *t)
     gpio_set_value(TRIG_PIN, 1);
     udelay(10);
     gpio_set_value(TRIG_PIN, 0);
-
+	gpio_set_value(LEDR, 0);
+	gpio_set_value(LEDL, 0);
+	
     while(distance<threshold)
     {
-        //turn ON LED3
-        //turn OFF LED1,2
+        gpio_set_value(LEDR, !gpio_get_value(LEDR));
+		gpio_set_value(LEDL, !gpio_get_value(LEDL));
         gpio_set_value(TRIG_PIN, 1);
         udelay(10);
         gpio_set_value(TRIG_PIN, 0);
@@ -177,23 +180,17 @@ static void timer_callback(struct timer_list *t)
 }
 
 static void kmod_exit(void) {
-	
     free_irq(irq_echo, NULL);
     gpio_free(MIC1);
     gpio_free(TRIG_PIN);
     gpio_free(ECHO_PIN);
+	gpio_free(LEDR);
+	gpio_free(LEDL);
     printk(KERN_ALERT "Exiting module\n");
 }
 
 
 module_init(kmod_init);
 module_exit(kmod_exit);
-
-
-
-
-
-
-
 
 
