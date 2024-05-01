@@ -27,12 +27,13 @@ MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("BeagleBone Controller for Sound Activated RC Car");
 #define DEBUG 1
 #define DEVICE_NAME "TRAILBLAZER"
-#define THRESHOLD 20
+#define THRESHOLD_D 20
+#define THRESHOLD_S 1000
 
 /* Define GPIO pinout */
 #define DOUT 116
-#define LEDR 49
-#define LEDL 117
+#define LEDR 68
+#define LEDL 67
 #define TRIG_PIN 51
 #define ECHO_PIN 48
 
@@ -44,7 +45,6 @@ static void gpio_init(void);
 static void timer_callback(struct timer_list* t);
 static irqreturn_t echo_isr(int irq, void *data);
 static void init_echo_irq(void);
-static void init_obstacle_irq(void);
 static void sound_direction(void);
 
 /* struct & global var declarations */
@@ -53,6 +53,8 @@ static ktime_t echo_start, echo_end;
 static bool measuring = false;
 static int irq_echo;
 static int distance;
+static bool danger;
+static bool winner;
 
 
 static void set_pin_mode(u32 offset, u8 mode) {
@@ -96,9 +98,9 @@ static irqreturn_t echo_isr(int irq, void *data) {
 }
 
 static void init_echo_irq(void) {
-    int result;
-    irq_echo = gpio_to_irq(ECHO_PIN);
-    result = request_irq(irq_echo, echo_isr, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "echo_irq_handler", NULL);
+	int result;
+	irq_echo = gpio_to_irq(ECHO_PIN);
+	result = request_irq(irq_echo, echo_isr, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "echo_irq_handler", NULL);
     if (result) {
         printk(KERN_ERR "Unable to request IRQ: %d\n", result);
     }
@@ -107,8 +109,8 @@ static void init_echo_irq(void) {
 static void gpio_init(void) {
 
     //mic
-    set_pin_mode(MCASP0_FSR_OFFSET, 6);
-    set_pin_mode(MCASP0_AXR1_OFFSET, 3);
+	set_pin_mode(MCASP0_FSR_OFFSET, 6);
+	set_pin_mode(MCASP0_AXR1_OFFSET, 3);
 	set_pin_mode(MCASP0_ACLKR_OFFSET, 3);
 
 	//LEDs
@@ -118,17 +120,47 @@ static void gpio_init(void) {
 	gpio_direction_output(LEDL, 0);
 
     //distance sensor
-    gpio_request(TRIG_PIN, "trig");
-    gpio_direction_output(TRIG_PIN, 0);
-    gpio_request(ECHO_PIN, "echo");
-    gpio_direction_input(ECHO_PIN);
-    init_echo_irq();
+	gpio_request(TRIG_PIN, "trig");
+	gpio_direction_output(TRIG_PIN, 0);
+	gpio_request(ECHO_PIN, "echo");
+	gpio_direction_input(ECHO_PIN);
+	init_echo_irq();
 }
 
 static void sound_direction(void)
 {
-    //logic to identift L/R sound
-    //turn on LED1,2
+	int rightmax=0,leftmax=0;
+	
+	
+    //logic to translate leftmax/rightmax to LEDs
+	if(leftmax >= rightmax)
+	{
+	winner = true;
+	}	
+	else if(leftmax < rightmax)
+	{
+	winner = false;
+	}
+	
+	if(!danger) //as long as no obstacle
+	{
+		if(winner && (leftmax > THRESHOLD_S))
+		{
+		gpio_set_value(LEDR, 0);
+		gpio_set_value(LEDL, 1);	
+		}
+		else if(!winner && (rightmax > THRESHOLD_S))
+		{
+		gpio_set_value(LEDR, 1);
+		gpio_set_value(LEDL, 0);
+		}
+		else
+		{
+		gpio_set_value(LEDR, 0);
+		gpio_set_value(LEDL, 0);
+		}
+	}
+
 }
 
 static int kmod_init(void) {
@@ -151,18 +183,25 @@ static void timer_callback(struct timer_list *t)
     gpio_set_value(TRIG_PIN, 1);
     udelay(10);
     gpio_set_value(TRIG_PIN, 0);
-	gpio_set_value(LEDR, 0);
-    gpio_set_value(LEDL, 0);
 	
-    while(distance<THRESHOLD)
-    {
-        gpio_set_value(LEDR, !gpio_get_value(LEDR));
+    if(distance<THRESHOLD_D)
+	{
+		if(!danger)
+		{
+		gpio_set_value(LEDR, 0);
+		gpio_set_value(LEDL, 0);
+		}
+	gpio_set_value(LEDR, !gpio_get_value(LEDR));
 	gpio_set_value(LEDL, !gpio_get_value(LEDL));
-        gpio_set_value(TRIG_PIN, 1);
-        udelay(10);
-        gpio_set_value(TRIG_PIN, 0);
-	udelay(500000);
+	gpio_set_value(TRIG_PIN, 1);
+	udelay(10);
+	gpio_set_value(TRIG_PIN, 0);
+	danger = true;
     }
+	else
+	{
+	danger = false;
+	}
 
 	sound_direction();
     
@@ -170,16 +209,14 @@ static void timer_callback(struct timer_list *t)
 }
 
 static void kmod_exit(void) {
-    free_irq(irq_echo, NULL);
-    gpio_free(TRIG_PIN);
-    gpio_free(ECHO_PIN);
-    gpio_free(LEDR);
-    gpio_free(LEDL);
-    printk(KERN_ALERT "Exiting module\n");
+	free_irq(irq_echo, NULL);
+	gpio_free(TRIG_PIN);
+	gpio_free(ECHO_PIN);
+	gpio_free(LEDR);
+	gpio_free(LEDL);
+	printk(KERN_ALERT "Exiting module\n");
 }
 
 
 module_init(kmod_init);
 module_exit(kmod_exit);
-
-
