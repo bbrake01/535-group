@@ -161,6 +161,7 @@ static void timer_callback(struct timer_list *t)
         gpio_set_value(TRIG_PIN, 1);
         udelay(10);
         gpio_set_value(TRIG_PIN, 0);
+	udelay(500000);
     }
 
 	sound_direction();
