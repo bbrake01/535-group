@@ -31,13 +31,12 @@ MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("BeagleBone Controller for Sound Activated RC Car");
 #define DEBUG 1
 #define DEVICE_NAME "TRAILBLAZER"
-#define THRESHOLD_D 20
-#define THRESHOLD_S 1000
+#define THRESHOLD 20
 
 /* Define GPIO pinout */
 #define DOUT 116
-#define LEDR 68
-#define LEDL 67
+#define LEDR 49
+#define LEDL 117
 #define TRIG_PIN 51
 #define ECHO_PIN 48
 #define ACLKR 114
@@ -52,6 +51,7 @@ static void gpio_init(void);
 static void timer_callback(struct timer_list* t);
 static irqreturn_t echo_isr(int irq, void *data);
 static void init_echo_irq(void);
+static void init_obstacle_irq(void);
 static void sound_direction(void);
 static void config_mcasp(void);
 
@@ -62,8 +62,6 @@ static ktime_t echo_start, echo_end;
 static bool measuring = false;
 static int irq_echo;
 static int distance;
-static bool danger;
-static bool winner;
 void __iomem *mcasp_base;
 
 
@@ -155,7 +153,6 @@ static void sound_direction(void)
     {
         gpio_set_value(LEDR, 1);
     }
-    
 }
 
 static int kmod_init(void) {
@@ -166,7 +163,6 @@ static int kmod_init(void) {
 
     timer_setup(&timer, timer_callback, 0);
     mod_timer(&timer, jiffies + msecs_to_jiffies(500));
-    config_mcasp();
 
     printk(KERN_ALERT "Module loaded\n");
     
@@ -175,33 +171,25 @@ static int kmod_init(void) {
 
 static void timer_callback(struct timer_list *t)
 {
-    // Trigger HC-SR04 
+    // Trigger HC-SR04
     gpio_set_value(TRIG_PIN, 1);
     udelay(10);
     gpio_set_value(TRIG_PIN, 0);
+	gpio_set_value(LEDR, 0);
+    gpio_set_value(LEDL, 0);
 	
-    if(distance<THRESHOLD_D)
-	{
-		if(!danger)
-		{
-		gpio_set_value(LEDR, 0);
-		gpio_set_value(LEDL, 0);
-		}
-	gpio_set_value(LEDR, !gpio_get_value(LEDR));
-	gpio_set_value(LEDL, !gpio_get_value(LEDL));
-	gpio_set_value(TRIG_PIN, 1);
-	udelay(10);
-	gpio_set_value(TRIG_PIN, 0);
-	danger = true;
+    while(distance<THRESHOLD)
+    {
+        gpio_set_value(LEDR, !gpio_get_value(LEDR));
+	    gpio_set_value(LEDL, !gpio_get_value(LEDL));
+        gpio_set_value(TRIG_PIN, 1);
+        udelay(10);
+        gpio_set_value(TRIG_PIN, 0);
     }
-	else
-	{
-	danger = false;
-	}
 
 	sound_direction();
     
-	mod_timer(&timer, jiffies + msecs_to_jiffies(500));   
+	mod_timer(&timer, jiffies + msecs_to_jiffies(500));  
 }
 
 static void kmod_exit(void) {
@@ -217,3 +205,5 @@ static void kmod_exit(void) {
 
 module_init(kmod_init);
 module_exit(kmod_exit);
+
+
